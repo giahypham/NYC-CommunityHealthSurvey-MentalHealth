@@ -1,0 +1,495 @@
+---
+  title: "emp_final_code"
+author: "Hy Pham"
+date: "5/25/2020"
+output:
+  word_document: default
+html_document: default
+---
+  ```{r}
+setwd("~/OneDrive - The CIty College of New York/mbp/m.a. econ/empirical research/emp proj/data")
+load("chs_2016.RData")
+```
+
+```{r message= FALSE, warning=FALSE}
+library(lmtest)
+library(sandwich)
+library(AER)
+library(tidyverse)
+library(ggplot2)
+library(devtools)
+library(dotwhisker)
+options(scipen=999)
+```
+
+```{r message= FALSE, warning=FALSE}
+library(officer)
+library(stargazer)
+library(flextable)
+```
+
+depression
+```{r}
+summary(chs_2016$currdepress)
+summary(chs_2016$phq8score) #patient health queestionnaire depression scale 0-24
+```
+
+substances
+```{r}
+summary(chs_2016$smoker)     #1=never 2=current 3 = former
+summary(chs_2016$heavydrink16)
+```
+
+demographics. cannot access genderid since gotta get permission so not straight is used
+```{r}
+summary(chs_2016$age18_64) # 1 = 18024 2=25-44 3=45-64
+summary(chs_2016$sex) #1=male
+summary(chs_2016$sexualid16) #1=gay/les 2=straight 3 = bi 3=sth else
+summary(chs_2016$education) #1=less hs 2=hs 3=some college4=college
+summary(chs_2016$emp3) #1=emp 2= unemp 3 =notin laborp
+summary(chs_2016$imputed_pov200) #1 = <200
+summary(chs_2016$newrace) #1= white 2=black 3=hispanic 4=azn 5=other
+summary(chs_2016$hhsize) 
+```
+
+converting and filtering out NA's
+
+```{r}
+nyc_chs <- select(chs_2016,currdepress, phq8score, smoker, heavydrink16, age18_64, sex, sexualid16, education, emp3, imputed_pov200, newrace, hhsize)
+is.na(nyc_chs) <- nyc_chs == ".d"
+is.na(nyc_chs) <- nyc_chs == ".r"
+is.na(nyc_chs) <- nyc_chs == "."
+nyc_chs <- na.omit(nyc_chs)
+```
+
+#variables as factors for brief summary
+
+factors
+```{r}
+sex_factor <- as.factor(nyc_chs$sex)
+levels(sex_factor) <- c("Male", "Female")
+sex_id_factor <- as.factor(nyc_chs$sexualid16)
+levels(sex_id_factor) <- c("Gay/Lesbian", "Straight", "Bi-Sexual", "Something Else")
+race_factor <- as.factor(nyc_chs$newrace)
+levels(race_factor) <- c("White", "Black", "Hispanic", "Asian", "Other")
+education_factor <- as.factor(nyc_chs$education)
+levels(education_factor) <-c("Less than HS", "High School Graduate", "Some College", "College Graduate")
+```
+
+```{r}
+summary(sex_factor)
+summary(race_factor)
+```
+
+
+converting to dummies
+
+depression dummies. depressed = yes to depression and phq score >= 10
+```{r}
+nyc_chs$Depression <- as.numeric(nyc_chs$currdepress == "1")
+nyc_chs$Depression_Score <- as.numeric(nyc_chs$phq8score >= "10")
+```
+siummary
+```{r}
+summary(nyc_chs$phq8score)
+summary(nyc_chs$currdepress)
+```
+
+substance dummies
+```{r}
+nyc_chs$Current_Smoker <- as.numeric(nyc_chs$smoker == "1")
+nyc_chs$Heavy_Drinker <- as.numeric(nyc_chs$heavydrink16 == "1")
+```
+
+demographics
+
+genders
+```{r}
+nyc_chs$Female <- as.numeric(nyc_chs$sex == "2")
+nyc_chs$Male <- as.numeric(nyc_chs$sex == "1")
+nyc_chs$Straight <- as.numeric(nyc_chs$sexualid16 == "2")
+nyc_chs$Gay_Lesbian_Bi_Other <- as.numeric(nyc_chs$sexualid16 == "1" | nyc_chs$sexualid16 == "3" | nyc_chs$sexualid16 == "4")
+```
+
+
+age
+
+```{r}
+nyc_chs$Age18_24 <- as.numeric(nyc_chs$age18_64 == "1")
+nyc_chs$Age25_44 <- as.numeric(nyc_chs$age18_64 == "2")
+nyc_chs$Age45_64 <- as.numeric(nyc_chs$age18_64 == "3")
+```
+race
+```{r}
+nyc_chs$White <- as.numeric(nyc_chs$newrace == "1")
+nyc_chs$Black <- as.numeric(nyc_chs$newrace == "2")
+nyc_chs$Hispanic <- as.numeric(nyc_chs$newrace =="3")
+nyc_chs$Asian <- as.numeric(nyc_chs$newrace == "4")
+nyc_chs$OtherRaces <- as.numeric(nyc_chs$newrace == "5")
+```
+
+education
+```{r}
+nyc_chs$Less_HS<-as.numeric(nyc_chs$education=="1")
+nyc_chs$HS_Grad<-as.numeric(nyc_chs$education=="2")
+nyc_chs$Some_College<-as.numeric(nyc_chs$education=="3")
+nyc_chs$College_Grad<-as.numeric(nyc_chs$education=="4")
+```
+
+employment & income & household
+```{r}
+nyc_chs$Employed <- as.numeric(nyc_chs$emp3 == "1")
+nyc_chs$Unemployed <- as.numeric(nyc_chs$emp3 == "2")
+nyc_chs$Poor_HH <- as.numeric(nyc_chs$imputed_pov200 == "1")
+nyc_chs$Not_Poor_HH <- as.numeric(nyc_chs$imputed_pov200 =="2")
+nyc_chs$Average_Household_Size <- as.numeric(mean(nyc_chs$hhsize))
+```
+
+
+
+phd8 graph
+```{r}
+phq_chart <- ggplot(nyc_chs, aes(phq8score))
+phq_chart + geom_histogram(fill="#FF9999", colour = "black") + ggtitle("The Eight-Item Patient Health Questionnaire Scores Among Responders")+xlab("PHQ-8 Scores\n(Greater than 10 = Depressed)") + ylab("Frequency\n(n=6476)") + coord_flip() +theme(plot.title=element_text(face = "bold",hjust=0.5))
+```
+
+
+
+sexualid chart
+```{r}
+par(mfrow=c(1,2))
+sexid_chart <- ggplot(nyc_chs,aes(sex_id_factor))
+sexid_chart + geom_bar(width=.75, fill="#56B4E9", colour ="black") + ggtitle("Responses to Questions of Sexual Identification") + xlab("Sexual Identity") + ylab("Frequency\n(n=6476)") +theme(plot.title=element_text(face = "bold",hjust=0.5)) + geom_text(stat='count',aes(label=..count..), position=position_dodge(width=0.9), vjust=-0.25)
+
+race_chart <- ggplot(nyc_chs, aes(race_factor))
+race_chart + geom_bar(width=0.5, fill = "#009E73", colour = "black") + ggtitle("Population Division by Race/Ethnicity") + xlab("Ethnicity") +ylab("Frequency\n(n=6476)") +theme(plot.title=element_text(face = "bold",hjust=0.5))  + geom_text(stat='count',aes(label=..count..), position=position_dodge(width=0.9), vjust=-0.25)
+```
+
+education chart
+```{r}
+edu_chart <- ggplot(nyc_chs, aes(education_factor))
+edu_chart + geom_bar(width = .5, fill ="#0072B2", colour = "black") + ggtitle("Population Division by Education Level") +xlab("Education Level") + ylab("Frequency\n(n=6476)") + theme(plot.title=element_text(face = "bold", hjust =0.5)) + geom_text(stat='count',aes(label=..count..), position=position_dodge(width=0.9), vjust=-0.25)
+
+
+
+```
+
+
+
+
+looking for sums
+
+dep_score and race and gender
+```{r}
+sum(nyc_chs$Depression_Score & nyc_chs$White)
+sum(nyc_chs$Depression_Score&nyc_chs$Asian)
+sum(nyc_chs$Depressio_Score &nyc_chs$Hispanic)
+sum(nyc_chs$Depression_Score & nyc_chs$OtherRaces)
+sum(nyc_chs$Depression_Score & nyc_chs$Black)
+
+sum(nyc_chs$Depression_Score & nyc_chs$Straight)
+sum(nyc_chs$Depression_Score & nyc_chs$Gay_Lesbian_Bi_Other)
+sum(nyc_chs$Depression_Score & nyc_chs$Male)
+sum(nyc_chs$Depression_Score & nyc_chs$Female)
+```
+
+
+depression and race and gender
+```{r}
+sum(nyc_chs$Depression & nyc_chs$White)
+sum(nyc_chs$Depression&nyc_chs$Asian)
+sum(nyc_chs$Depression &nyc_chs$Hispanic)
+sum(nyc_chs$Depression & nyc_chs$OtherRaces)
+sum(nyc_chs$Depression & nyc_chs$Black
+    )
+sum(nyc_chs$Depression & nyc_chs$Straight)
+sum(nyc_chs$Depression & nyc_chs$Gay_Lesbian_Bi_Other)
+sum(nyc_chs$Depression & nyc_chs$Male)
+sum(nyc_chs$Depression & nyc_chs$Female)
+
+```
+
+
+
+depression numbers are smaller than the phq scale numbers ->> look at percentages
+
+percentage of phq per race and gender
+```{r}
+#white 
+(886/1816)*100
+#asian
+(340/850)*100
+#hispanic
+(1114/2082)*100
+#other
+(93/172)*100
+#black
+(714/1556)*100
+
+
+#straigh
+(2919/6085)*100
+#other_id
+(228/391)*100
+#male
+(1305/2806)*100
+#female
+(1842/3616)*100
+```
+
+% of depression per race and gender
+```{r}
+#white 
+(128/1816)*100
+#asian
+(32/850)*100
+#hispanic
+(260/2082)*100
+#other
+(21/172)*100
+#black
+(127/1556)*100
+
+
+#straigh
+(508/6085)*100
+#other_id
+(60/391)*100
+#male
+(227/2806)*100
+#female
+(341/3616)*100
+```
+percentage phq data frames
+```{r}
+phq_percentage_race <- data.frame(White = c(48.79),
+                                  Asian = c(40.00),
+                                  Hispanic = c(53.53),
+                                  Other = c(54.07),
+                                  Black = c(45.89))
+phq_percentage_gender <- data.frame("Straight" = c(47.97),
+                                    "Not Straight"=c(58.31),
+                                    "Male"=c(46.51),
+                                    "Female"=c(50.94))
+```
+
+
+
+
+percentage depression data frames
+```{r}
+dep_percentage_race <- data.frame("White" = c(7.05),
+                                  "Asian" = c(3.76),
+                                  "Hispanic" = c(12.49),
+                                  "Other" = c(12.21),
+                                  "Black" = c(8.16))
+dep_percentage_gender <- data.frame("Straight" = c(8.35),
+                                    "Not Straight"=c(15.35),
+                                    "Male"=c(8.09),
+                                    "Female"=c(9.43))
+```
+
+
+
+tables for the above
+```{r}
+table1 <- flextable(phq_percentage_race)
+table1 <- add_header_lines(table1, values = c("Percentage of Respondents with PHQ Greater than 10 Respective to Their Ethnicity"))
+table2<-flextable(phq_percentage_gender)
+table2 <- add_header_lines(table2, values = c("Percentage of Respondents with PHQ Greater than 10 Respective to Their Gender"))
+
+
+table3 <-flextable(dep_percentage_race)
+table3<-add_header_lines(table3, values=c("Percentages of Responsdents who Said 'Yes' to having Depression in the Last 2 weeks Respective to Their Ethnicity"))
+table4<- flextable((dep_percentage_gender))
+table4<- add_header_lines(table4, values=c("Percentages of Responsdents who Said 'Yes' to having Depression in the Last 2 weeks Respective to Their Gender"))
+print(table1, preview="docx")
+print(table2, preview="docx")
+print(table3, preview="docx")
+print(table4, preview="docx")
+```
+
+
+REGRESSIONS and also regressing 
+
+
+no control
+```{r}
+ model11 <- lm(nyc_chs$Depression_Score ~ nyc_chs$Gay_Lesbian_Bi_Other) 
+summary(model11)
+```
+
+gender model vs phq (male is control)
+```{r}
+model1 <- lm(nyc_chs$Depression_Score ~ nyc_chs$Gay_Lesbian_Bi_Other  + nyc_chs$Female )
+summary(model1)
+```
+
+gender model vs dep
+```{r}
+model2 <- lm(nyc_chs$Depression ~ nyc_chs$Gay_Lesbian_Bi_Other +nyc_chs$Female)
+summary(model2)
+```
+
+
+phq vs 
+```{r}
+model3 <- lm(nyc_chs$Depression_Score ~ nyc_chs$Gay_Lesbian_Bi_Other 
+             + nyc_chs$Age25_44 + nyc_chs$Age18_24 
+             + nyc_chs$White + nyc_chs$Black + nyc_chs$Hispanic + nyc_chs$Asian
+             + nyc_chs$Poor_HH 
+             + nyc_chs$Less_HS + nyc_chs$HS_Grad  + nyc_chs$College_Grad + nyc_chs$Unemployed)
+summary(model3)
+```
+
+
+
+```{r}
+model4<- lm(nyc_chs$Depression ~ nyc_chs$Gay_Lesbian_Bi_Other 
+             + nyc_chs$Age25_44 + nyc_chs$Age18_24 
+             + nyc_chs$White + nyc_chs$Black + nyc_chs$Hispanic + nyc_chs$Asian
+             + nyc_chs$Poor_HH 
+             + nyc_chs$Less_HS + nyc_chs$HS_Grad  + nyc_chs$College_Grad + nyc_chs$Unemployed)
+summary(model4)
+```
+
+
+substance
+```{r}
+model5 <- lm(nyc_chs$Depression_Score~ nyc_chs$Heavy_Drinker + nyc_chs$Current_Smoker + nyc_chs$Poor_HH + nyc_chs$Unemployed)
+summary(model5)
+```
+
+
+
+```{r}
+model6 <- lm(nyc_chs$Depression~ nyc_chs$Heavy_Drinker + nyc_chs$Current_Smoker + nyc_chs$Poor_HH + nyc_chs$Unemployed)
+summary(model6)
+```
+
+```{r}
+model_phq <- lm(nyc_chs$Depression_Score ~ nyc_chs$Gay_Lesbian_Bi_Other +nyc_chs$Female
+             + nyc_chs$Age25_44 + nyc_chs$Age18_24 
+             + nyc_chs$White + nyc_chs$Black + nyc_chs$Hispanic + nyc_chs$Asian
+             + nyc_chs$Poor_HH 
+             + nyc_chs$Less_HS + nyc_chs$HS_Grad  + nyc_chs$College_Grad + nyc_chs$Unemployed
+             + nyc_chs$Heavy_Drinker + nyc_chs$Current_Smoker )
+summary(model_phq)
+```
+
+
+```{r}
+model_dep <- lm(nyc_chs$Depression ~ nyc_chs$Gay_Lesbian_Bi_Other +nyc_chs$Female
+             + nyc_chs$Age25_44 + nyc_chs$Age18_24 
+             + nyc_chs$White + nyc_chs$Black + nyc_chs$Hispanic + nyc_chs$Asian
+             + nyc_chs$Poor_HH 
+             + nyc_chs$Less_HS + nyc_chs$HS_Grad  + nyc_chs$College_Grad + nyc_chs$Unemployed
+             + nyc_chs$Heavy_Drinker + nyc_chs$Current_Smoker )
+summary(model_dep)
+```
+
+```{r}
+summary(nyc_chs$Depression_Score)
+summary(nyc_chs$Depression)
+
+```
+
+```{r word_table, comment=""}
+stargazer(model_phq, model_dep, type = "latex", out="rergession.txt",
+          dep.var.labels = c("PHQ-8 Score Greater than 10", "Sel-Reported Depression"),
+          covariate.labels = c("Non-Cisgender", "Female",
+                               "Age 25-44", "Age 18-24",
+                               "White", "Black", "Hispanic", "Asian", 
+                               "<200FPL Hoouseholds", 
+                               "Did Not Graduate HS", "High School Graduate", "College Graduate",
+                               "Heavy Drinking", "Currently Smoking"),
+          title="Determinants of Mental Health")
+```
+
+
+```{r}
+dwp <- dwplot(list(model_phq, model_dep), show_intercept = TRUE)
+
+dwp + relabel_predictors(c(nyc_chs$Gay_Lesbian_Bi_Other = "Non-Cisgender",
+                            nyc_chs$Female = "Female",
+                            nyc_chs$Age25_44 = "Age 25-44",
+                            nyc_chs$Age18_24 = "Age 18-24",
+                            nyc_chs$White = "White",
+                            nyc_chs$Black = "Black",
+                            nyc_chs$Hispanic = "Hispanic",
+                            nyc_chs$Asian = "Asian",
+                            nyc_chs$Poor_HH = "<200FPL Households",
+                            nyc_chs$Less_HS = "Did Not Graduate HS",
+                            nyc_chs$HS_Grad = "High School Graduate",
+                            nyc_chs$College_Grad = "College Graduate",
+                            nyc_chs$Unemployed = "Unemployment",
+                            nyc_chs$Heavy_Drinker = "Heavy Drinking",
+                            nyc_chs$Current_Smoker = "Currently Smoking"))+ xlab("Coefficient Estimate") + ylab("") + ggtitle("Determinants of Mental Health")
+```
+
+```{r}
+dwplot(list(model_phq, model_dep), show_intercept = TRUE) + ggtitle("Determinants of Mental Health") + xlab("Coefficient Estimates")
+
+```
+
+
+
+
+
+
+
+
+```{r}
+dwplot(list(model_phq,model_dep), show_intercept=TRUE, vline =geom_vline(xintercept=0, colour = "grey60", linetype =2)) %>% relabel_predictors(c("nyc_chs$Gay_Lesbian_Bi_Other"= "Non-Cisgender",
+                            "nyc_chs$Female" = "Female",
+                            "nyc_chs$Age25_44" = "Age 25-44",
+                            "nyc_chs$Age18_24" = "Age 18-24",
+                            "nyc_chs$White" = "White",
+                            "nyc_chs$Black" = "Black",
+                            "nyc_chs$Hispanic" = "Hispanic",
+                            "nyc_chs$Asian" = "Asian",
+                            "nyc_chs$Poor_HH" = "<200FPL Households",
+                            "nyc_chs$Less_HS" = "Did Not Graduate HS",
+                            "nyc_chs$HS_Grad" = "High School Graduate",
+                            "nyc_chs$College_Grad" = "College Graduate",
+                            "nyc_chs$Unemployed" = "Unemployment",
+                            "nyc_chs$Heavy_Drinker" = "Heavy Drinking",
+                            "nyc_chs$Current_Smoker" = "Currently Smoking")) + theme_bw() + xlab("Coefficient Estimate") + ggtitle("Determinants of Mental Health")
+```
+
+
+
+
+plot dataframe
+```{r}
+df1 <- data.frame(white = 48.8, asian = 40)
+df1 %>% 
+  t() %>% # convert columns to rows
+  as.data.frame() %>% # need to change it to a data frame as t() converts it to a matrix
+  rownames_to_column("id") %>% 
+  ggplot(aes(x = id, y = V1)) +
+  geom_col()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
